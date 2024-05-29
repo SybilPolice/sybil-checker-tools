@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Sybil Stats for GAMBLERS</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js"
+            integrity="sha384-I7E8VVD/ismYTF4hNIPjVp/Zjvgyol6VFvRkX/vR+Vc4jQkC+hVqc2pM8ODewa9r"
+            crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.min.js"
+            integrity="sha384-0pUGZvbkm6XF6gxjEnlmuGrJXVbNuzT9qBBavbLwCsOGabYfZo0T0to5eqruptLy"
+            crossorigin="anonymous"></script>
+    <style>
+      * {
+        margin: 0;
+        line-height: 100%;
+        box-sizing: border-box;
+      }
+
+      h6 {
+        margin: 0;
+      }
+
+      .form {
+        display: flex;
+        flex-direction: column;
+        row-gap: 20px;
+        max-width: 1400px;
+        width: 100%;
+        margin: auto;
+        padding: 50px;
+      }
+
+      .group-title {
+        display: flex;
+        /*justify-content: space-between;*/
+        align-items: center;
+        column-gap: 20px;
+      }
+
+      .filters {
+        display: flex;
+        flex-direction: column;
+        row-gap: 10px;
+      }
+
+      .filter {
+        display: flex;
+        align-items: center;
+        column-gap: 20px;
+      }
+
+      .filter-key,
+      .filter-value {
+        display: flex;
+        align-items: center;
+        column-gap: 10px;
+      }
+
+      .result-table thead {
+        position: sticky;
+        top: 0;
+      }
+    </style>
+</head>
+
+<body>
+    <main class="main">
+        <form class="form">
+            <div class="networks">
+                <label for="networks" class="form-label">Networks:</label>
+                <input id="networks" class="form-control"/>
+            </div>
+            <div class="wallets">
+                <label for="wallets" class="form-label">Wallets:</label>
+                <textarea id="wallets" class="form-control"></textarea>
+            </div>
+            <div class="group-title filters-title">
+                <h6>Filters</h6>
+                <button type="button" id="add-filter" class="btn btn-outline-primary">+</button>
+                <div id="filters">{}</div>
+            </div>
+            <div class="filters">
+                <div class="filter">
+                    <div class="filter-num">1.</div>
+                    <div class="filter-key">
+                        <label for="filter-key-1">Key:</label>
+                        <input id="filter-key-1" class="form-control"/>
+                    </div>
+                    <div class="filter-value">
+                        <label for="filter-value-1">Value:</label>
+                        <input id="filter-value-1" class="form-control"/>
+                    </div>
+                    <button type="button" class="btn btn-outline-primary remove-filter" disabled>-</button>
+                </div>
+            </div>
+            <div class="group-title result-title">
+                <h6>Result</h6>
+                <button type="button" id="get-result" class="btn btn-primary" disabled>Run</button>
+                <button type="button" id="download-result" class="btn btn-outline-primary" disabled>Download</button>
+            </div>
+        </form>
+        <table class="result-table table table-striped table-bordered table-hover table-sm">
+            <thead>
+                <tr>
+                    <th>Serial</th>
+                    <th>Wallet</th>
+                    <th>Balance</th>
+                    <th>Total volume</th>
+                    <th>Fees</th>
+                    <th>Stables volume</th>
+                    <th>Count of transactions</th>
+                    <th>Count of transaction tokens</th>
+                    <th>Active months</th>
+                    <th>Active days</th>
+                    <th>Days of life</th>
+                    <th>Count of unique addresses</th>
+                    <th>Time of first transaction</th>
+                    <th>Time of last transaction</th>
+                    <th>Count of transaction in Stargate</th>
+                    <th>Volume in Stargate</th>
+                    <th>Count of transaction in Merkly</th>
+                    <th>Volume in Merkly</th>
+                    <th>Count of unique smart contracts</th>
+                    <th>Pattern</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td colspan="20" style="text-align: center;">-</td>
+                </tr>
+            </tbody>
+        </table>
+    </main>
+</body>
+
+<script src="../src/utils/html.js"></script>
+
+<script>
+  const SERVER = 'http://localhost:8081'; // need change
+
+  let wallets = [];
+  let filters = {};
+  let data = {};
+  const walletsInput = document.getElementById('wallets');
+  const runBtn = document.getElementById('get-result');
+  const downloadBtn = document.getElementById('download-result');
+  const isEmpty = (val) => val == null || val === '';
+
+  walletsInput.addEventListener(
+    'input',
+    (evt) => {
+      wallets = evt.srcElement.value.trim().split(/\r\n|\r|\n/).filter((it) => !isEmpty(it));
+
+      if (!isEmpty(evt.srcElement.value)) {
+        runBtn.removeAttribute('disabled');
+      } else {
+        runBtn.setAttribute('disabled', true);
+      }
+    }
+  );
+
+  const getFilterElements = () => document.querySelectorAll('.filter');
+
+  const updateFilters = () => {
+    filters = {};
+
+    getFilterElements().forEach((filter) => {
+      const key = filter.querySelector('.filter-key input').value;
+      let value = filter.querySelector('.filter-value input').value;
+
+      if (isEmpty(key) && !isEmpty(value)) {
+        if (!filter.querySelector('.filter-error')) {
+          const error = document.createElement('div');
+          error.classList.add('filter-error', 'text-danger');
+          error.innerHTML = 'Incorrect filter';
+          filter.appendChild(error);
+        }
+      } else {
+        filter.querySelector('.filter-error')?.remove();
+
+        if (!isEmpty(key)) {
+          try {
+            filters[key] = JSON.parse(value);
+          } catch (err) {
+            filters[key] = value;
+          }
+        }
+      }
+
+      switch (value) {
+        case 'null':
+          value = null;
+          break;
+        case 'undefined':
+          value = undefined;
+          break;
+      }
+    });
+
+    document.getElementById('filters').innerHTML = JSON.stringify(filters);
+  };
+
+  document.querySelector('.filter-key input').addEventListener('input', updateFilters);
+  document.querySelector('.filter-value input').addEventListener('input', updateFilters);
+
+  document.getElementById('add-filter').onclick = () => {
+    const filterNum = getFilterElements().length + 1;
+    const filter = document.querySelector('.filter').cloneNode(true);
+    filter.querySelector('.filter-num').innerHTML = filterNum + '.';
+    const key = filter.querySelector('.filter-key');
+    key.querySelector('label').setAttribute('for', 'filter-key-' + filterNum);
+    const keyInput = key.querySelector('input');
+    keyInput.setAttribute('id', 'filter-key-' + filterNum);
+    keyInput.value = '';
+    keyInput.addEventListener('input', updateFilters);
+    const value = filter.querySelector('.filter-value');
+    value.querySelector('label').setAttribute('for', 'filter-value-' + filterNum);
+    const valueInput = value.querySelector('input');
+    valueInput.setAttribute('id', 'filter-value-' + filterNum);
+    valueInput.value = '';
+    valueInput.addEventListener('input', updateFilters);
+    const remove = filter.querySelector('.remove-filter');
+    remove.removeAttribute('disabled');
+    remove.onclick = () => {
+      keyInput.removeEventListener('input', updateFilters);
+      valueInput.removeEventListener('input', updateFilters);
+      filter.remove();
+      updateFilters();
+    };
+    document.querySelector('.filters').appendChild(filter);
+  };
+
+  const getTableRow = (group) =>
+    group.length
+      ? group.map((row) => `
+        <tr>
+          ${
+            [
+              row.serialNum,
+              row.wallet,
+              row.balance,
+              row.volumes.total,
+              row.volumes.fees,
+              row.volumes.stables,
+              row.txCount,
+              row.txTokenCount,
+              row.time.month,
+              row.time.days,
+              row.time.age,
+              row.addresses.uniqAddressesCount,
+              new Date(row.time.firstTx).toLocaleDateString(),
+              new Date(row.time.lastTx).toLocaleDateString(),
+              row.stargate.count,
+              row.stargate.total,
+              row.merkly.count,
+              row.merkly.total,
+              row.smartContracts.uniqueContractsCount,
+              row.addresses.hash,
+            ].map((col) => `<td>${col}</td>`).join('')
+          }
+        </tr>
+      `).join('')
+      : `
+        <tr>
+          <td colspan="20" style="text-align: center;">-</td>
+        </tr>
+      `;
+
+  runBtn.onclick = async () => {
+    const table = document.querySelector('.result-table tbody');
+    runBtn.setAttribute('disabled', true);
+    downloadBtn.setAttribute('disabled', true);
+    table.innerHTML = `
+      <tr>
+        <td colspan="20" style="text-align: center;">Loading...</td>
+      </tr>
+    `;
+
+    const networks = document.getElementById('networks').value.trim().split(',').filter((it) => !isEmpty(it));
+    await fetch(
+      `${SERVER}/api/stats`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json;charset=utf-8',
+        },
+        body: JSON.stringify({
+          networks: networks.length ? networks : undefined,
+          wallets,
+          filters,
+        }),
+      }
+    )
+      .then(async (res) => {
+        if (res.ok) {
+          return res.json();
+        }
+
+        throw await res.json();
+      })
+      .then((res) => {
+        data = res;
+        const networks = Object.keys(data);
+
+        if (networks.length) {
+          downloadBtn.removeAttribute('disabled');
+
+          if (networks.length > 1) {
+            table.innerHTML = networks.map((network) => `
+              <tr>
+                <td colspan="20" style="text-align: center;">${network}</td>
+              </tr>
+              ${getTableRow(data[network])}
+            `).join('');
+          } else {
+            table.innerHTML = getTableRow(data[networks[0]]);
+          }
+        } else {
+          table.innerHTML = `
+            <tr>
+              <td colspan="20" style="text-align: center;">-</td>
+            </tr>
+          `;
+        }
+      })
+      .catch((err) => {
+        alert(err.message || 'Smth went wrong');
+        console.error(err);
+      })
+      .finally(() => (runBtn.removeAttribute('disabled')));
+  };
+
+  downloadBtn.onclick = () => {
+    const ts = Date.now();
+    Object.entries(data).forEach(([network, data]) => {
+      const temp = document.createElement('a');
+
+      temp.href = 'data:text/csv;charset=utf-8,' + makeCSV(
+        {
+          serialNum: 'Serial',
+          wallet: 'Wallet',
+          balance: 'Balance',
+          'volumes.total': 'Total volume',
+          'volumes.fees': 'Fees',
+          'volumes.stables': 'Stables volume',
+          txCount: 'Count of transactions',
+          txTokenCount: 'Count of transaction tokens',
+          'time.month': 'Active months',
+          'time.days': 'Active days',
+          'time.age': 'Days of life',
+          'addresses.uniqAddressesCount': 'Count of unique addresses',
+          'time.firstTx': 'Time of first transaction',
+          'time.lastTx': 'Time of last transaction',
+          'stargate.count': 'Count of transaction in Stargate',
+          'stargate.total': 'Volume in Stargate',
+          'merkly.count': 'Count of transaction in Merkly',
+          'merkly.total': 'Volume in Merkly',
+          'smartContracts.uniqueContractsCount': 'Count of unique smart contracts',
+          'addresses.hash': 'Pattern'
+        },
+        data,
+        {
+          'time.firstTx': 'timestamp',
+          'time.lastTx': 'timestamp',
+        },
+        ';'
+      );
+
+      temp.download = `${network}WalletStats.${ts}.csv`;
+      temp.click();
+      temp.remove();
+    });
+  };
+</script>
+
+</html>
